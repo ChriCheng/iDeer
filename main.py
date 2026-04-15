@@ -36,60 +36,95 @@ def main():
     parser = argparse.ArgumentParser(description="Unified Daily Recommender")
 
     parser.add_argument(
-        "--sources", nargs="+",
+        "--sources",
+        nargs="+",
         choices=list(SOURCE_REGISTRY.keys()),
         help=f"Information sources to run: {list(SOURCE_REGISTRY.keys())}",
     )
 
     # LLM config
     parser.add_argument(
-        "--provider", type=str,
+        "--provider",
+        type=str,
         default=provider_default,
         help="LLM provider (default: openai; configurable via PROVIDER in .env)",
     )
     parser.add_argument(
-        "--model", type=str,
+        "--model",
+        type=str,
         default=model_default,
         help="Model name (configured via MODEL_NAME in .env)",
     )
     parser.add_argument(
-        "--base_url", type=str, default=base_url_default,
+        "--base_url",
+        type=str,
+        default=base_url_default,
         help="API base URL (configured via BASE_URL in .env)",
     )
     parser.add_argument(
-        "--api_key", type=str, default=api_key_default,
+        "--api_key",
+        type=str,
+        default=api_key_default,
         help="API key (configured via API_KEY in .env)",
     )
     parser.add_argument(
         "--temperature",
         type=float,
-        default=float(temperature_default) if temperature_default not in (None, "") else 0.7,
+        default=(
+            float(temperature_default) if temperature_default not in (None, "") else 1
+        ),
         help="Temperature (configured via TEMPERATURE in .env)",
     )
 
     # Email config
-    parser.add_argument("--smtp_server", type=str, default=env_str("SMTP_SERVER"), help="SMTP server")
-    parser.add_argument("--smtp_port", type=int, default=env_int("SMTP_PORT"), help="SMTP port")
-    parser.add_argument("--sender", type=str, default=env_str("SMTP_SENDER"), help="Sender email")
     parser.add_argument(
-        "--receiver", type=str, default=env_str("SMTP_RECEIVER"), help="Receiver email(s), comma separated"
+        "--smtp_server", type=str, default=env_str("SMTP_SERVER"), help="SMTP server"
     )
     parser.add_argument(
-        "--sender_password", type=str, default=env_str("SMTP_PASSWORD"), help="Sender email password"
+        "--smtp_port", type=int, default=env_int("SMTP_PORT"), help="SMTP port"
+    )
+    parser.add_argument(
+        "--sender", type=str, default=env_str("SMTP_SENDER"), help="Sender email"
+    )
+    parser.add_argument(
+        "--receiver",
+        type=str,
+        default=env_str("SMTP_RECEIVER"),
+        help="Receiver email(s), comma separated",
+    )
+    parser.add_argument(
+        "--sender_password",
+        type=str,
+        default=env_str("SMTP_PASSWORD"),
+        help="Sender email password",
     )
 
     # Common config
     parser.add_argument(
-        "--description", type=str, default=os.getenv("DESCRIPTION_FILE", "profiles/description.txt"),
-        help="Interest description file path"
+        "--description",
+        type=str,
+        default=os.getenv("DESCRIPTION_FILE", "profiles/description.txt"),
+        help="Interest description file path",
     )
     parser.add_argument(
-        "--num_workers", type=int, default=env_int("NUM_WORKERS", 4), help="Number of parallel workers"
+        "--num_workers",
+        type=int,
+        default=env_int("NUM_WORKERS", 4),
+        help="Number of parallel workers",
     )
     parser.add_argument("--save", action="store_true", help="Save results to history")
-    parser.add_argument("--save_dir", type=str, default="./history", help="History save directory")
-    parser.add_argument("--profile_hash", type=str, default="", help="Pre-computed profile hash for cache isolation")
-    parser.add_argument("--state_dir", type=str, default="./state", help="State directory for caches")
+    parser.add_argument(
+        "--save_dir", type=str, default="./history", help="History save directory"
+    )
+    parser.add_argument(
+        "--profile_hash",
+        type=str,
+        default="",
+        help="Pre-computed profile hash for cache isolation",
+    )
+    parser.add_argument(
+        "--state_dir", type=str, default="./state", help="State directory for caches"
+    )
     parser.add_argument(
         "--skip_source_emails",
         action="store_true",
@@ -109,15 +144,39 @@ def main():
     )
 
     # Idea generation config
-    parser.add_argument("--generate_ideas", action="store_true", help="Generate research ideas from recommendations")
-    parser.add_argument("--researcher_profile", type=str, default="profiles/researcher_profile.md",
-                        help="Path to researcher profile for idea generation")
-    parser.add_argument("--idea_min_score", type=float, default=7, help="Min score for idea generation input")
-    parser.add_argument("--idea_max_items", type=int, default=15, help="Max items to feed into idea generator")
-    parser.add_argument("--idea_count", type=int, default=5, help="Number of ideas to generate")
+    parser.add_argument(
+        "--generate_ideas",
+        action="store_true",
+        help="Generate research ideas from recommendations",
+    )
+    parser.add_argument(
+        "--researcher_profile",
+        type=str,
+        default="profiles/researcher_profile.md",
+        help="Path to researcher profile for idea generation",
+    )
+    parser.add_argument(
+        "--idea_min_score",
+        type=float,
+        default=7,
+        help="Min score for idea generation input",
+    )
+    parser.add_argument(
+        "--idea_max_items",
+        type=int,
+        default=15,
+        help="Max items to feed into idea generator",
+    )
+    parser.add_argument(
+        "--idea_count", type=int, default=5, help="Number of ideas to generate"
+    )
 
     # Cross-source report config
-    parser.add_argument("--generate_report", action="store_true", help="Generate a personalized cross-source report")
+    parser.add_argument(
+        "--generate_report",
+        action="store_true",
+        help="Generate a personalized cross-source report",
+    )
     parser.add_argument(
         "--report_profile",
         type=str,
@@ -175,6 +234,7 @@ def main():
     # Handle cache clean (can run standalone without --sources)
     if args.cache_clean is not None:
         from pipeline.agent_bridge import cache_clean
+
         targets = args.cache_clean if args.cache_clean else ["all"]
         cache_clean(targets, before=args.cache_clean_before)
         if not args.sources:
@@ -188,9 +248,13 @@ def main():
 
     # Validate LLM config
     if args.generate_ideas and not args.save:
-        raise ValueError("--generate_ideas requires --save so ideas.json is available for /idea-from-daily")
+        raise ValueError(
+            "--generate_ideas requires --save so ideas.json is available for /idea-from-daily"
+        )
     if args.generate_ideas and not os.path.exists(args.researcher_profile):
-        raise FileNotFoundError(f"Researcher profile not found: {args.researcher_profile}")
+        raise FileNotFoundError(
+            f"Researcher profile not found: {args.researcher_profile}"
+        )
     if args.report_profile and not os.path.exists(args.report_profile):
         raise FileNotFoundError(f"Report profile not found: {args.report_profile}")
     provider = args.provider.lower()
@@ -206,7 +270,10 @@ def main():
 
     # Compute profile hash for cache isolation
     from core.cache_utils import stable_profile_hash
-    profile_hash = getattr(args, "profile_hash", "") or stable_profile_hash(description_text)
+
+    profile_hash = getattr(args, "profile_hash", "") or stable_profile_hash(
+        description_text
+    )
 
     # Build configs
     llm_config = LLMConfig(
@@ -235,13 +302,14 @@ def main():
     print("Testing LLM availability...")
     if llm_config.provider.lower() == "ollama":
         from llm.Ollama import Ollama
+
         test_model = Ollama(llm_config.model)
     else:
         from llm.GPT import GPT
+
         test_model = GPT(llm_config.model, llm_config.base_url, llm_config.api_key)
     try:
-        test_model.inference("Hello, who are you?",
-                             temperature=args.temperature)
+        test_model.inference("Hello, who are you?", temperature=args.temperature)
         print("LLM is available.")
     except Exception as e:
         print(f"LLM test failed: {e}")
@@ -273,7 +341,9 @@ def main():
 
         print(f"\nRunning {len(args.sources)} sources in parallel: {args.sources}")
         with ThreadPoolExecutor(max_workers=len(args.sources)) as executor:
-            futures = {executor.submit(_run_source, name): name for name in args.sources}
+            futures = {
+                executor.submit(_run_source, name): name for name in args.sources
+            }
             for future in as_completed(futures):
                 name = futures[future]
                 try:
@@ -346,7 +416,9 @@ def main():
             generator.save(ideas)
             generator.render_email(ideas)
             if args.skip_source_emails:
-                print("[IdeaGenerator] Skip idea email because --skip_source_emails is enabled.")
+                print(
+                    "[IdeaGenerator] Skip idea email because --skip_source_emails is enabled."
+                )
             else:
                 generator.send_email(ideas, email_config)
         else:

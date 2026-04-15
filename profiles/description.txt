@@ -1,18 +1,34 @@
-I am a researcher focused on AI Agent Safety. My core research interests span the following areas:
+I am working on the research area of EEG privacy protection, brain-computer interfaces, and trustworthy machine learning for neural signals.
 
-1. Agent Safety — Safety of LLM-based autonomous agents, including unsafe tool use, unintended side effects, goal misgeneralization, out-of-distribution behavior, and safe exploration in agentic workflows.
+Specifically, I am interested in the following fields:
 
-2. Hallucination — Factual errors, confabulation, and grounding failures in LLMs and agents; detection, mitigation, and evaluation of hallucination; retrieval-augmented generation as a countermeasure.
+1. Federated Learning
+- federated learning for EEG and brain-computer interface systems
+- privacy-preserving distributed training on neural signal data
+- subject-wise and cross-device collaborative learning for EEG
+- federated optimization methods for non-IID EEG data
+- communication-efficient and personalization methods in federated EEG learning
 
-3. Misalignment — Value misalignment, reward hacking, specification gaming, Goodhart's Law, and failures of RLHF/RLAIF; scalable oversight, weak-to-strong generalization, and alignment evaluation.
+2. Safety
+- privacy protection in EEG-based brain-computer interfaces
+- user identity leakage and subject re-identification from EEG signals
+- privacy-preserving EEG representation learning
+- differential privacy, local differential privacy, and privacy accounting methods for neural signal learning
+- adversarial robustness and security risks in EEG decoding systems
+- safety risks of deploying EEG foundation models and neural interfaces in real-world settings
 
-4. Deception — LLM deceptive behavior, sycophancy, sandbagging, hidden reasoning, strategic manipulation, and dishonesty in agents; detecting and eliciting deceptive behavior.
+3. Trustworthy
+- trustworthy EEG decoding and brain-computer interface systems
+- robustness and generalization across subjects, sessions, and datasets
+- cross-session and cross-subject transfer in motor imagery EEG
+- interpretable and explainable EEG models
+- reliability, calibration, and uncertainty estimation for EEG classifiers
+- fair and reproducible evaluation of EEG learning methods
+- trustworthy representation learning for balancing task utility and privacy protection
 
-5. Codex / Code Agents — Safety of code-generating models and autonomous coding agents (e.g., OpenHands, SWE-agent, Codex); vulnerabilities introduced by agent-generated code, backdoors, and code-level attacks.
 
-6. Prompt Optimization & Attacks — Adversarial prompts, jailbreaks, prompt injection, automated red-teaming, and prompt optimization methods (e.g., APE, GCG, AutoDAN); defenses and robustness to prompt-level attacks.
+I'm not interested in the following fields:
 
-I am NOT interested in: computer vision safety, hardware security, network intrusion detection, classical ML robustness unrelated to LLMs.
 
 IMPORTANT: When generating the summary, please organize the content BY EACH of my six interest directions above.
 For each direction, list the most relevant papers/repos/items separately with a brief explanation of why each is relevant to my research. Prioritize items that sit at the intersection of multiple directions (e.g., deceptive agents, misaligned code agents, prompt-based attacks on agent safety).
