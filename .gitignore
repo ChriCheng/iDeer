@@ -33,3 +33,6 @@ chatbot_test_outputs/
 .client_config.json
 client/.client_config.json
 .client_logs/
+
+# profiles
+profiles/*
