@@ -171,12 +171,23 @@ def main():
         "--idea_count", type=int, default=5, help="Number of ideas to generate"
     )
 
-    parser.add_argument("--sync_zotero", action="store_true",
-                        help="Sync high-score papers to Zotero after recommendations")
-    parser.add_argument("--zotero_min_score", type=float, default=7,
-                        help="Min score for Zotero auto-sync (default: 7)")
-    parser.add_argument("--zotero_collection", type=str, default="",
-                        help="Zotero collection name (default: iDeer Daily {date})")
+    parser.add_argument(
+        "--sync_zotero",
+        action="store_true",
+        help="Sync high-score papers to Zotero after recommendations",
+    )
+    parser.add_argument(
+        "--zotero_min_score",
+        type=float,
+        default=7,
+        help="Min score for Zotero auto-sync (default: 7)",
+    )
+    parser.add_argument(
+        "--zotero_collection",
+        type=str,
+        default="",
+        help="Zotero collection name (default: iDeer Daily {date})",
+    )
 
     # Cross-source report config
     parser.add_argument(
@@ -437,15 +448,42 @@ def main():
         print(f"{'='*60}")
 
         from pathlib import Path
-        zotero_script = Path.home() / ".claude" / "skills" / "zotero-mcp" / "scripts" / "zotero_save.py"
-        zotero_python = Path.home() / ".local" / "share" / "uv" / "tools" / "zotero-mcp-server" / "bin" / "python"
+
+        zotero_script = Path(
+            os.getenv(
+                "ZOTERO_SAVE_SCRIPT",
+                str(
+                    Path.home()
+                    / ".claude"
+                    / "skills"
+                    / "zotero-mcp"
+                    / "scripts"
+                    / "zotero_save.py"
+                ),
+            )
+        )
+        zotero_python = (
+            Path.home()
+            / ".local"
+            / "share"
+            / "uv"
+            / "tools"
+            / "zotero-mcp-server"
+            / "bin"
+            / "python"
+        )
         if not zotero_script.exists():
             print(f"[zotero] Script not found: {zotero_script}")
         else:
             import subprocess
+
             py = str(zotero_python) if zotero_python.exists() else "python"
             from datetime import datetime as _dt
-            collection = args.zotero_collection or f"iDeer Daily {_dt.now().strftime('%Y-%m-%d')}"
+
+            collection = (
+                args.zotero_collection
+                or f"iDeer Daily {_dt.now().strftime('%Y-%m-%d')}"
+            )
             synced = 0
             for source_name, recs in all_recs.items():
                 for item in recs:
@@ -454,18 +492,40 @@ def main():
                     url = item.get("url", "")
                     if not url:
                         continue
-                    cmd = [py, str(zotero_script), "--url", url,
-                           "--collection", collection, "--tags", f"iDeer,{source_name}"]
+                    cmd = [
+                        py,
+                        str(zotero_script),
+                        "--url",
+                        url,
+                        "--collection",
+                        collection,
+                        "--tags",
+                        f"iDeer,{source_name}",
+                    ]
                     try:
-                        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                        r = subprocess.run(
+                            cmd, capture_output=True, text=True, timeout=30
+                        )
                         if r.returncode == 0:
                             synced += 1
                         else:
                             title = item.get("title", "")
                             if title:
-                                cmd2 = [py, str(zotero_script), "--title", title, "--url", url,
-                                        "--collection", collection, "--tags", f"iDeer,{source_name}"]
-                                subprocess.run(cmd2, capture_output=True, text=True, timeout=30)
+                                cmd2 = [
+                                    py,
+                                    str(zotero_script),
+                                    "--title",
+                                    title,
+                                    "--url",
+                                    url,
+                                    "--collection",
+                                    collection,
+                                    "--tags",
+                                    f"iDeer,{source_name}",
+                                ]
+                                subprocess.run(
+                                    cmd2, capture_output=True, text=True, timeout=30
+                                )
                                 synced += 1
                     except Exception as e:
                         print(f"[zotero] Error: {url[:60]} — {e}")

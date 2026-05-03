@@ -16,7 +16,10 @@ from typing import Any
 import requests
 
 BASE_URL = "https://api.semanticscholar.org/graph/v1"
-FIELDS = "title,abstract,url,year,citationCount,referenceCount,publicationVenue,authors,externalIds,publicationDate"
+FIELDS = (
+    "title,abstract,url,year,citationCount,referenceCount,"
+    "publicationVenue,authors,externalIds,publicationDate,openAccessPdf"
+)
 DEFAULT_TIMEOUT = 30
 DEFAULT_HEADERS = {
     "User-Agent": "iDeer-daily-recommender/1.0",
@@ -146,6 +149,10 @@ def _normalize_paper(raw: dict[str, Any]) -> dict[str, Any]:
         url = f"https://arxiv.org/abs/{arxiv_id}"
     if not url and doi:
         url = f"https://doi.org/{doi}"
+    open_access_pdf = raw.get("openAccessPdf") or {}
+    pdf_url = (
+        open_access_pdf.get("url", "") if isinstance(open_access_pdf, dict) else ""
+    )
 
     return {
         "paper_id": raw.get("paperId", ""),
@@ -160,4 +167,5 @@ def _normalize_paper(raw: dict[str, Any]) -> dict[str, Any]:
         "arxiv_id": arxiv_id,
         "doi": doi,
         "publication_date": raw.get("publicationDate") or "",
+        "pdf_url": pdf_url,
     }

@@ -48,7 +48,9 @@ class ReportGenerator:
         self.model = self._build_model(llm_config)
 
         base_dir = str(PROJECT_ROOT)
-        self.save_dir = os.path.join(base_dir, common_config.save_dir, "reports", self.run_date)
+        self.save_dir = os.path.join(
+            base_dir, common_config.save_dir, "reports", self.run_date
+        )
         self.email_cache_path = os.path.join(self.save_dir, "report.html")
 
         if common_config.save:
@@ -112,13 +114,19 @@ class ReportGenerator:
         }
 
         if source_name == "github":
-            normalized["entity"] = str(rec.get("repo_name", rec.get("title", ""))).strip()
+            normalized["entity"] = str(
+                rec.get("repo_name", rec.get("title", ""))
+            ).strip()
             normalized["detail"] = " / ".join(
                 part
                 for part in [
                     str(rec.get("language", "")).strip(),
                     self._truncate(rec.get("description", ""), 220),
-                    "；".join(str(x).strip() for x in rec.get("highlights", [])[:3] if str(x).strip()),
+                    "；".join(
+                        str(x).strip()
+                        for x in rec.get("highlights", [])[:3]
+                        if str(x).strip()
+                    ),
                 ]
                 if part
             )
@@ -135,9 +143,13 @@ class ReportGenerator:
                 normalized["detail"] = self._truncate(rec.get("abstract", ""), 260)
                 normalized["metrics"] = f"upvotes={int(rec.get('upvotes', 0) or 0)}"
             else:
-                tags = ", ".join(str(x).strip() for x in rec.get("tags", [])[:6] if str(x).strip())
+                tags = ", ".join(
+                    str(x).strip() for x in rec.get("tags", [])[:6] if str(x).strip()
+                )
                 normalized["detail"] = " / ".join(
-                    part for part in [self._truncate(rec.get("description", ""), 200), tags] if part
+                    part
+                    for part in [self._truncate(rec.get("description", ""), 200), tags]
+                    if part
                 )
                 normalized["metrics"] = (
                     f"likes={int(rec.get('likes', 0) or 0)}, "
@@ -146,13 +158,19 @@ class ReportGenerator:
         elif source_name == "twitter":
             author = str(rec.get("author_name", rec.get("author_username", ""))).strip()
             handle = str(rec.get("author_username", "")).strip()
-            normalized["entity"] = f"{author} (@{handle})" if author and handle else author or handle
+            normalized["entity"] = (
+                f"{author} (@{handle})" if author and handle else author or handle
+            )
             normalized["time"] = self._format_time(rec.get("created_at", ""))
             normalized["detail"] = " / ".join(
                 part
                 for part in [
                     self._truncate(rec.get("text", ""), 280),
-                    "；".join(str(x).strip() for x in rec.get("key_points", [])[:3] if str(x).strip()),
+                    "；".join(
+                        str(x).strip()
+                        for x in rec.get("key_points", [])[:3]
+                        if str(x).strip()
+                    ),
                 ]
                 if part
             )
@@ -169,7 +187,9 @@ class ReportGenerator:
         for source_name, recs in self.all_recs.items():
             source_items = [self._normalize_item(source_name, rec) for rec in recs]
             source_items.sort(key=lambda item: item.get("score", 0), reverse=True)
-            qualified = [item for item in source_items if item.get("score", 0) >= self.min_score]
+            qualified = [
+                item for item in source_items if item.get("score", 0) >= self.min_score
+            ]
             if not qualified:
                 qualified = source_items[: min(3, len(source_items))]
             normalized.extend(qualified)
@@ -318,7 +338,7 @@ Requirements:
         first_brace = cleaned.find("{")
         last_brace = cleaned.rfind("}")
         if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-            cleaned = cleaned[first_brace:last_brace + 1]
+            cleaned = cleaned[first_brace : last_brace + 1]
         return cleaned.strip()
 
     @staticmethod
@@ -353,7 +373,16 @@ Invalid JSON:
     def _repair_report_json(self, invalid_json: str) -> dict[str, Any] | None:
         print("[ReportGenerator] Attempting JSON repair pass.")
         repair_prompt = self._build_repair_prompt(invalid_json)
-        repaired_raw = self.model.inference(repair_prompt, temperature=0.0)
+
+        try:
+            repaired_raw = self.model.inference(
+                repair_prompt,
+                temperature=self.llm_config.temperature,
+            )
+        except Exception as e:
+            print(f"[ReportGenerator] JSON repair API call failed: {e}")
+            return None
+
         repaired = self._parse_json_object(repaired_raw)
         if repaired is None:
             print("[ReportGenerator] JSON repair pass failed.")
@@ -368,7 +397,9 @@ Invalid JSON:
             "url": str(signal.get("url", "")).strip(),
         }
 
-    def _fallback_signals(self, filtered_items: list[dict], limit: int = 3) -> list[dict[str, str]]:
+    def _fallback_signals(
+        self, filtered_items: list[dict], limit: int = 3
+    ) -> list[dict[str, str]]:
         signals = []
         for item in filtered_items[:limit]:
             signals.append(
@@ -381,7 +412,9 @@ Invalid JSON:
             )
         return signals
 
-    def _build_fallback_report(self, filtered_items: list[dict], reason: str) -> dict[str, Any]:
+    def _build_fallback_report(
+        self, filtered_items: list[dict], reason: str
+    ) -> dict[str, Any]:
         top_items = filtered_items[: max(1, min(self.max_items, len(filtered_items)))]
         source_counts: dict[str, int] = {}
         for item in top_items:
@@ -390,7 +423,9 @@ Invalid JSON:
         source_line = " / ".join(
             item["source_label"] for item in top_items[:3] if item.get("source_label")
         )
-        top_titles = "、".join(self._safe_slug(item.get("title", "")) for item in top_items[:3])
+        top_titles = "、".join(
+            self._safe_slug(item.get("title", "")) for item in top_items[:3]
+        )
         opening = (
             f"今天的高分信号主要来自 {source_line or '多源'}。"
             f"当前最值得优先关注的条目包括 {top_titles}。"
@@ -399,7 +434,10 @@ Invalid JSON:
 
         themes = []
         for item in top_items[: self.theme_count]:
-            detail = str(item.get("summary", "")).strip() or str(item.get("detail", "")).strip()
+            detail = (
+                str(item.get("summary", "")).strip()
+                or str(item.get("detail", "")).strip()
+            )
             if not detail:
                 detail = "该条目在今天的筛选结果中得分较高，值得继续跟踪。"
             narrative = (
@@ -409,7 +447,8 @@ Invalid JSON:
             )
             themes.append(
                 {
-                    "title": self._safe_slug(item.get("title", "Untitled"), limit=48) or "今日重点信号",
+                    "title": self._safe_slug(item.get("title", "Untitled"), limit=48)
+                    or "今日重点信号",
                     "narrative": narrative,
                     "signals": [
                         {
@@ -451,10 +490,14 @@ Invalid JSON:
 
         watchlist = []
         for item in top_items[:5]:
-            reason_text = str(item.get("summary", "")).strip() or str(item.get("detail", "")).strip()
+            reason_text = (
+                str(item.get("summary", "")).strip()
+                or str(item.get("detail", "")).strip()
+            )
             watchlist.append(
                 {
-                    "item": self._safe_slug(item.get("title", "Untitled"), limit=52) or "重点条目",
+                    "item": self._safe_slug(item.get("title", "Untitled"), limit=52)
+                    or "重点条目",
                     "reason": reason_text or "今天的多源筛选结果中优先级较高。",
                 }
             )
@@ -487,7 +530,9 @@ Invalid JSON:
             },
         }
 
-    def _normalize_report(self, data: dict[str, Any], filtered_items: list[dict]) -> dict[str, Any]:
+    def _normalize_report(
+        self, data: dict[str, Any], filtered_items: list[dict]
+    ) -> dict[str, Any]:
         title = str(data.get("report_title", "")).strip() or self.report_title
         subtitle = str(data.get("subtitle", "")).strip()
         opening = str(data.get("opening", "")).strip()
@@ -519,7 +564,9 @@ Invalid JSON:
                         matched_item = item_by_title.get(normalized_signal["title"])
                     if matched_item:
                         if not normalized_signal["source"]:
-                            normalized_signal["source"] = str(matched_item.get("source", "")).strip()
+                            normalized_signal["source"] = str(
+                                matched_item.get("source", "")
+                            ).strip()
                         if not normalized_signal["why_it_matters"]:
                             normalized_signal["why_it_matters"] = str(
                                 matched_item.get("summary", "")
@@ -531,7 +578,8 @@ Invalid JSON:
                     {
                         "title": theme_title,
                         "narrative": narrative,
-                        "signals": signals or self._fallback_signals(filtered_items, limit=2),
+                        "signals": signals
+                        or self._fallback_signals(filtered_items, limit=2),
                     }
                 )
         themes = themes[: self.theme_count]
@@ -599,7 +647,8 @@ Invalid JSON:
                 "date": self.run_date,
                 "generated_at": self.run_datetime.isoformat(),
                 "source_counts": {
-                    source_name: len(recs) for source_name, recs in self.all_recs.items()
+                    source_name: len(recs)
+                    for source_name, recs in self.all_recs.items()
                 },
                 "input_item_count": len(filtered_items),
             },
@@ -608,7 +657,9 @@ Invalid JSON:
     def generate(self) -> dict[str, Any] | None:
         filtered = self._filter_items()
         if not filtered:
-            print("[ReportGenerator] No recommendation items available for report generation.")
+            print(
+                "[ReportGenerator] No recommendation items available for report generation."
+            )
             return None
 
         print(
@@ -734,10 +785,14 @@ Invalid JSON:
             if watchlist:
                 f.write("## 继续跟踪\n\n")
                 for watch in watchlist:
-                    f.write(f"- **{watch.get('item', '')}**：{watch.get('reason', '')}\n")
+                    f.write(
+                        f"- **{watch.get('item', '')}**：{watch.get('reason', '')}\n"
+                    )
                 f.write("\n")
         print(f"[ReportGenerator] Markdown saved to {md_path}")
 
     def send_email(self, report: dict[str, Any], email_config: EmailConfig):
         html = self.render_email(report)
-        BaseSource._send_email_html(html, email_config, self.report_title, self.run_datetime)
+        BaseSource._send_email_html(
+            html, email_config, self.report_title, self.run_datetime
+        )

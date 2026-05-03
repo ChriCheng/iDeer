@@ -23,15 +23,18 @@ else
   echo "No usable Python interpreter found." >&2
   exit 1
 fi
+
 SOURCES=(${DAILY_SOURCES:-arxiv semanticscholar huggingface})
 ARXIV_CATEGORIES=(${ARXIV_CATEGORIES:-cs.AI cs.CL cs.LG})
 GH_LANGUAGES=(${GH_LANGUAGES:-all})
 HF_CONTENT_TYPES=(${HF_CONTENT_TYPES:-papers})
+
 IDEA_ARGS=()
 REPORT_ARGS=()
 SS_QUERY_ARGS=()
 SS_FIELD_ARGS=()
 SOURCE_EMAIL_ARGS=()
+ZOTERO_ARGS=()
 
 if [ -n "${SS_QUERIES:-}" ]; then
   IFS='|' read -r -a SS_QUERY_VALUES <<< "${SS_QUERIES}"
@@ -77,27 +80,100 @@ if [ "${SKIP_SOURCE_EMAILS:-0}" = "1" ]; then
   SOURCE_EMAIL_ARGS+=(--skip_source_emails)
 fi
 
-"$PYTHON_BIN" main.py \
-  --sources "${SOURCES[@]}" \
-  --description "${DESCRIPTION_FILE:-profiles/description.txt}" \
-  --num_workers "${NUM_WORKERS:-8}" \
-  --temperature "${TEMPERATURE:-0.5}" \
-  --save \
-  --arxiv_categories "${ARXIV_CATEGORIES[@]}" \
-  --arxiv_max_entries "${ARXIV_MAX_ENTRIES:-100}" \
-  --arxiv_max_papers "${ARXIV_MAX_PAPERS:-60}" \
-  --ss_max_results "${SS_MAX_RESULTS:-60}" \
-  --ss_max_papers "${SS_MAX_PAPERS:-30}" \
-  --ss_year "${SS_YEAR:-}" \
-  --ss_api_key "${SS_API_KEY:-}" \
-  "${SS_QUERY_ARGS[@]}" \
-  "${SS_FIELD_ARGS[@]}" \
-  --gh_languages "${GH_LANGUAGES[@]}" \
-  --gh_since "${GH_SINCE:-daily}" \
-  --gh_max_repos "${GH_MAX_REPOS:-30}" \
-  --hf_content_type "${HF_CONTENT_TYPES[@]}" \
-  --hf_max_papers "${HF_MAX_PAPERS:-30}" \
-  --hf_max_models "${HF_MAX_MODELS:-15}" \
-  "${SOURCE_EMAIL_ARGS[@]}" \
-  "${REPORT_ARGS[@]}" \
-  "${IDEA_ARGS[@]}"
+# =========================
+# Zotero auto-sync options
+# =========================
+# Enable with:
+#   SYNC_ZOTERO=1
+#
+# Optional:
+#   ZOTERO_MIN_SCORE=7
+#   ZOTERO_COLLECTION="iDeer Daily Papers"
+#
+# Note:
+#   main.py currently uses a hard-coded zotero_save.py path:
+#   ~/.claude/skills/zotero-mcp/scripts/zotero_save.py
+if [ "${SYNC_ZOTERO:-0}" = "1" ]; then
+  ZOTERO_ARGS+=(--sync_zotero)
+  ZOTERO_ARGS+=(--zotero_min_score "${ZOTERO_MIN_SCORE:-7}")
+
+  if [ -n "${ZOTERO_COLLECTION:-}" ]; then
+    ZOTERO_ARGS+=(--zotero_collection "${ZOTERO_COLLECTION}")
+  fi
+fi
+
+CMD=(
+  "$PYTHON_BIN" main.py
+  --sources "${SOURCES[@]}"
+  --description "${DESCRIPTION_FILE:-profiles/description.txt}"
+  --num_workers "${NUM_WORKERS:-8}"
+  --temperature "${TEMPERATURE:-0.5}"
+  --save
+  --arxiv_categories "${ARXIV_CATEGORIES[@]}"
+  --arxiv_max_entries "${ARXIV_MAX_ENTRIES:-100}"
+  --arxiv_max_papers "${ARXIV_MAX_PAPERS:-60}"
+  --ss_max_results "${SS_MAX_RESULTS:-60}"
+  --ss_max_papers "${SS_MAX_PAPERS:-30}"
+  --ss_year "${SS_YEAR:-}"
+  --ss_api_key "${SS_API_KEY:-}"
+)
+
+if [ "${#SS_QUERY_ARGS[@]}" -gt 0 ]; then
+  CMD+=("${SS_QUERY_ARGS[@]}")
+fi
+
+if [ "${#SS_FIELD_ARGS[@]}" -gt 0 ]; then
+  CMD+=("${SS_FIELD_ARGS[@]}")
+fi
+
+CMD+=(
+  --gh_languages "${GH_LANGUAGES[@]}"
+  --gh_since "${GH_SINCE:-daily}"
+  --gh_max_repos "${GH_MAX_REPOS:-30}"
+  --hf_content_type "${HF_CONTENT_TYPES[@]}"
+  --hf_max_papers "${HF_MAX_PAPERS:-30}"
+  --hf_max_models "${HF_MAX_MODELS:-15}"
+)
+
+if [ "${#SOURCE_EMAIL_ARGS[@]}" -gt 0 ]; then
+  CMD+=("${SOURCE_EMAIL_ARGS[@]}")
+fi
+
+if [ "${#REPORT_ARGS[@]}" -gt 0 ]; then
+  CMD+=("${REPORT_ARGS[@]}")
+fi
+
+if [ "${#IDEA_ARGS[@]}" -gt 0 ]; then
+  CMD+=("${IDEA_ARGS[@]}")
+fi
+
+if [ "${#ZOTERO_ARGS[@]}" -gt 0 ]; then
+  CMD+=("${ZOTERO_ARGS[@]}")
+fi
+
+printf '[run_daily] Command: '
+printf '%q ' "${CMD[@]}"
+echo
+
+"${CMD[@]}"
+# =========================
+# Import today's history JSON to Zotero
+# =========================
+if [ "${IMPORT_ZOTERO_HISTORY:-0}" = "1" ]; then
+  echo
+  echo "============================================================"
+  echo "Importing iDeer history to Zotero..."
+  echo "============================================================"
+
+  if [ ! -f "scripts/zotero_save.py" ]; then
+    echo "[zotero_import] scripts/zotero_save.py not found." >&2
+    exit 1
+  fi
+
+  "$PYTHON_BIN" scripts/zotero_save.py \
+    --import_history \
+    --sources "${SOURCES[@]}" \
+    --parent_collection "${ZOTERO_PARENT_COLLECTION:-iDeer Daily Papers}" \
+    --min_score "${ZOTERO_MIN_SCORE:-7}" \
+
+fi
