@@ -5,11 +5,14 @@ API, which covers 200M+ papers.
 """
 
 import argparse
+import hashlib
 import json
-from datetime import datetime
+import os
+from datetime import datetime, timedelta
 
 from sources.base import BaseSource
-from core.config import LLMConfig, CommonConfig
+from core.config import LLMConfig, CommonConfig, PROJECT_ROOT
+from core.cache_utils import safe_read_json, atomic_write_json
 from fetchers.semanticscholar_fetcher import fetch_papers_for_queries
 from email_utils.base_template import get_stars
 from email_utils.semanticscholar_template import get_paper_block_html
@@ -19,7 +22,9 @@ class SemanticScholarSource(BaseSource):
     name = "semanticscholar"
     default_title = "Semantic Scholar Daily"
 
-    def __init__(self, source_args: dict, llm_config: LLMConfig, common_config: CommonConfig):
+    def __init__(
+        self, source_args: dict, llm_config: LLMConfig, common_config: CommonConfig
+    ):
         super().__init__(source_args, llm_config, common_config)
         self.queries = source_args.get("queries", [])
         self.max_results = source_args.get("max_results", 60)
@@ -27,15 +32,23 @@ class SemanticScholarSource(BaseSource):
         self.year_filter = source_args.get("year", "")
         self.fields_of_study = source_args.get("fields_of_study", [])
         self.api_key = source_args.get("api_key", "")
-
+        self.seen_window_days = source_args.get("seen_window_days", 180)
+        self.seen_path = os.path.join(
+            str(PROJECT_ROOT),
+            common_config.state_dir,
+            "seen",
+            "semanticscholar_seen.json",
+        )
+        self.seen_papers = self._load_seen_papers()
         # If no explicit queries, derive from the interest description
         if not self.queries:
             self.queries = self._derive_queries_from_description()
 
         import hashlib
-        query_sig = hashlib.sha256(
-            "|".join(sorted(self.queries)).encode()
-        ).hexdigest()[:10]
+
+        query_sig = hashlib.sha256("|".join(sorted(self.queries)).encode()).hexdigest()[
+            :10
+        ]
         cache_key = f"papers_{query_sig}_{self.max_results}"
         if self.year_filter:
             cache_key += f"_{self.year_filter}"
@@ -53,23 +66,78 @@ class SemanticScholarSource(BaseSource):
             if self.raw_papers:
                 self._save_fetch_cache(cache_key, self.raw_papers)
 
+    def _paper_seen_key(self, item: dict) -> str:
+        """
+        Generate a stable key for a Semantic Scholar paper.
+        Prefer paper_id; fall back to DOI/arXiv/url/title hash.
+        """
+        for key in ("paper_id", "doi", "arxiv_id", "url"):
+            value = str(item.get(key, "")).strip().lower()
+            if value:
+                return value
+
+        title = str(item.get("title", "")).strip().lower()
+        authors = str(item.get("authors", "")).strip().lower()
+        return hashlib.sha256(f"{title}|{authors}".encode("utf-8")).hexdigest()
+
+    def _load_seen_papers(self) -> dict:
+        """
+        Load permanently seen/recommended Semantic Scholar papers.
+        Once a paper is recorded here, it will not be recommended again.
+        """
+        data = safe_read_json(self.seen_path) or {}
+        return data if isinstance(data, dict) else {}
+
+    def _mark_seen(self, recommendations: list[dict]) -> None:
+        """
+        Mark final recommended papers as seen.
+        Only final recommendations are recorded, not all fetched candidates.
+        """
+        if not recommendations:
+            return
+
+        data = dict(self.seen_papers)
+
+        for item in recommendations:
+            key = self._paper_seen_key(item)
+            old = data.get(key, {})
+            data[key] = {
+                "paper_id": item.get("paper_id", ""),
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "year": item.get("year", ""),
+                "venue": item.get("venue", ""),
+                "first_seen": old.get("first_seen", self.run_date),
+                "last_seen": self.run_date,
+            }
+
+        atomic_write_json(self.seen_path, data)
+        self.seen_papers = data
+
     def _derive_queries_from_description(self) -> list[str]:
         """Extract up to 3 search queries from the user description."""
         desc = self.description.strip()
         if not desc:
             return ["artificial intelligence"]
 
-        lines = [line.strip().lstrip("0123456789.-) ") for line in desc.split("\n") if line.strip()]
+        lines = [
+            line.strip().lstrip("0123456789.-) ")
+            for line in desc.split("\n")
+            if line.strip()
+        ]
         queries = []
         for line in lines:
             # Skip negative preference lines
             lower = line.lower()
-            if any(neg in lower for neg in ("not interested", "不感兴趣", "don't", "exclude")):
+            if any(
+                neg in lower
+                for neg in ("not interested", "不感兴趣", "don't", "exclude")
+            ):
                 continue
             # Clean up common prefixes
             for prefix in ("i'm interested in", "interested in", "关注", "研究"):
                 if lower.startswith(prefix):
-                    line = line[len(prefix):].strip(" :：-")
+                    line = line[len(prefix) :].strip(" :：-")
             if line and len(line) > 2:
                 queries.append(line[:120])
             if len(queries) >= 3:
@@ -80,27 +148,39 @@ class SemanticScholarSource(BaseSource):
     @staticmethod
     def add_arguments(parser: argparse.ArgumentParser):
         parser.add_argument(
-            "--ss_queries", nargs="*", default=[],
+            "--ss_queries",
+            nargs="*",
+            default=[],
             help="[SemanticScholar] Explicit search queries (derived from description if empty)",
         )
         parser.add_argument(
-            "--ss_max_results", type=int, default=60,
+            "--ss_max_results",
+            type=int,
+            default=60,
             help="[SemanticScholar] Max results to fetch per query",
         )
         parser.add_argument(
-            "--ss_max_papers", type=int, default=30,
+            "--ss_max_papers",
+            type=int,
+            default=30,
             help="[SemanticScholar] Max papers to recommend after scoring",
         )
         parser.add_argument(
-            "--ss_year", type=str, default="",
+            "--ss_year",
+            type=str,
+            default="",
             help="[SemanticScholar] Year filter, e.g. '2024-' for papers from 2024 onward",
         )
         parser.add_argument(
-            "--ss_fields_of_study", nargs="*", default=[],
+            "--ss_fields_of_study",
+            nargs="*",
+            default=[],
             help="[SemanticScholar] Fields of study filter (e.g. 'Computer Science' 'Medicine')",
         )
         parser.add_argument(
-            "--ss_api_key", type=str, default="",
+            "--ss_api_key",
+            type=str,
+            default="",
             help="[SemanticScholar] Optional API key for higher rate limits",
         )
 
@@ -119,8 +199,28 @@ class SemanticScholarSource(BaseSource):
         return self.max_papers
 
     def fetch_items(self) -> list[dict]:
-        print(f"[{self.name}] {len(self.raw_papers)} total papers after dedup")
-        return self.raw_papers
+        filtered = []
+        skipped = 0
+
+        for paper in self.raw_papers:
+            key = self._paper_seen_key(paper)
+            if key in self.seen_papers:
+                skipped += 1
+                continue
+            filtered.append(paper)
+
+        print(
+            f"[{self.name}] {len(self.raw_papers)} total papers after query dedup; "
+            f"{len(filtered)} new papers after seen-filter; "
+            f"{skipped} skipped as already recommended"
+        )
+
+        return filtered
+
+    def get_recommendations(self) -> list[dict]:
+        recommendations = super().get_recommendations()
+        self._mark_seen(recommendations)
+        return recommendations
 
     def get_item_cache_id(self, item: dict) -> str:
         pid = item.get("paper_id", "unknown")
